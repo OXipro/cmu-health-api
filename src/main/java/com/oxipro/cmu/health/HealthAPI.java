@@ -8,11 +8,15 @@ import com.oxipro.cmu.health.listeners.OnDamageListener;
 import com.oxipro.cmu.health.listeners.OnDeathListener;
 import com.oxipro.cmu.health.mobOwner.MobOwnerTracker;
 import com.oxipro.cmu.versionsupport.PlayerUtilsSupport;
-import org.bukkit.Bukkit;
+import org.bukkit.entity.Player;
 import org.bukkit.event.Listener;
 import org.bukkit.plugin.Plugin;
 
 import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.UUID;
+import java.util.function.Predicate;
 
 import static org.bukkit.Bukkit.getLogger;
 
@@ -22,35 +26,39 @@ public class HealthAPI {
 
     private PlayerUtilsSupport playerUtilsSupport;
 
-    // Death messages
     private LastHitManager lastHitManager;
     private MobOwnerTracker mobOwnerTracker;
     private DeathContextManager deathContextManager;
     private DeathMessageHandler messageHandler;
 
+    private Predicate<Player> deathInterceptFilter;
+    private final Set<UUID> interceptedDeaths = new HashSet<>();
+
     public boolean register(Plugin plugin) {
-        if (plugin == null) return false;
-        this.plugin = plugin;
-        if (!initDeps()) return false;
-        registerListeners();
-        return true;
+        return register(plugin, null);
     }
 
-    private boolean initDeps() {
-        playerUtilsSupport = PlayerUtilsSupport.SupportBuilder.load();
-
-        if (playerUtilsSupport == null){
-            getLogger().severe("HEALTH-API: Server version not supported");
-            Bukkit.getPluginManager().disablePlugin(plugin);
+    public boolean register(Plugin plugin, PlayerUtilsSupport playerUtilsSupport) {
+        if (plugin == null) {
             return false;
         }
+        this.plugin = plugin;
+        this.playerUtilsSupport = playerUtilsSupport;
+        if (this.playerUtilsSupport == null) {
+            this.playerUtilsSupport = PlayerUtilsSupport.SupportBuilder.load();
+        }
+        if (this.playerUtilsSupport == null) {
+            getLogger().severe("HEALTH-API: Server version not supported");
+            return false;
+        }
+        initManagers();
+        registerListeners();
         return true;
     }
 
     private void initManagers() {
         lastHitManager = new LastHitManager();
         mobOwnerTracker = new MobOwnerTracker(plugin);
-        messageHandler = new DeathMessageHandler(plugin);
         deathContextManager = new DeathContextManager(lastHitManager, mobOwnerTracker);
     }
 
@@ -62,10 +70,33 @@ public class HealthAPI {
         Arrays.stream(listeners).forEach(l -> plugin.getServer().getPluginManager().registerEvents(l, plugin));
     }
 
-    public Plugin getPlugin() {
-        return  plugin;
+    public void setDeathInterceptFilter(Predicate<Player> filter) {
+        this.deathInterceptFilter = filter;
     }
 
+    public boolean shouldInterceptDeath(Player player) {
+        return player != null && deathInterceptFilter != null && deathInterceptFilter.test(player);
+    }
+
+    public boolean isDeathIntercepted(Player player) {
+        return player != null && interceptedDeaths.contains(player.getUniqueId());
+    }
+
+    public void markDeathIntercepted(Player player) {
+        if (player != null) {
+            interceptedDeaths.add(player.getUniqueId());
+        }
+    }
+
+    public void clearDeathIntercepted(Player player) {
+        if (player != null) {
+            interceptedDeaths.remove(player.getUniqueId());
+        }
+    }
+
+    public Plugin getPlugin() {
+        return plugin;
+    }
 
     public PlayerUtilsSupport getPlayerUtilsSupport() { return playerUtilsSupport; }
 

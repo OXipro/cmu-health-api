@@ -27,6 +27,8 @@ public class OnDeathListener implements Listener {
         // Suppress vanilla message ours comes from DeathContextManager
         event.setDeathMessage(null);
 
-        deathContextManager.handleDeath(victim);
+        if (deathContextManager != null) {
+            deathContextManager.handleDeath(victim);
+        }
     }
 }

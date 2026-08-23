@@ -2,7 +2,9 @@ package com.oxipro.cmu.health.listeners;
 
 import com.oxipro.cmu.health.HealthAPI;
 import com.oxipro.cmu.health.lastHit.LastHitManager;
-import org.bukkit.entity.*;
+import org.bukkit.entity.Entity;
+import org.bukkit.entity.Player;
+import org.bukkit.entity.Projectile;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
@@ -22,52 +24,72 @@ public class OnDamageListener implements Listener {
 
     public OnDamageListener(HealthAPI healthAPI) {
         this.healthAPI = healthAPI;
-        this.lastHitManager = new LastHitManager();
+        this.lastHitManager = healthAPI.getLastHitManager();
     }
 
     @EventHandler(priority = EventPriority.HIGHEST)
     public void onDamage(EntityDamageEvent e) {
-        if (e.isCancelled()) return;
-        if (e.getEntity() instanceof Player) {
-            Player player = (Player) e.getEntity();
-            double finalHealth = player.getHealth() - e.getFinalDamage();
-            if (finalHealth < 0.5) {
-                e.setCancelled(true);
-
-                player.setLastDamageCause(e);
-                List<ItemStack> drops = new ArrayList<>(Arrays.asList(player.getInventory().getContents()));
-                player.setLastDamageCause(e);
-                healthAPI.getPlayerUtilsSupport().fakeDamage(player);
-                healthAPI.getPlayerUtilsSupport().callPlayerDeathEvent(player, drops, 0, 0, "");
-            }
+        if (e.isCancelled()) {
+            return;
         }
+        if (!(e.getEntity() instanceof Player)) {
+            return;
+        }
+        Player player = (Player) e.getEntity();
+        if (healthAPI.isDeathIntercepted(player)) {
+            e.setCancelled(true);
+            return;
+        }
+        if (player.getHealth() - e.getFinalDamage() >= 0.5D) {
+            return;
+        }
+        if (!healthAPI.shouldInterceptDeath(player)) {
+            return;
+        }
+
+        e.setCancelled(true);
+        healthAPI.markDeathIntercepted(player);
+        player.setLastDamageCause(e);
+
+        Entity attacker = null;
+        if (e instanceof EntityDamageByEntityEvent) {
+            attacker = resolveAttacker(((EntityDamageByEntityEvent) e).getDamager());
+        }
+        lastHitManager.record(player, e.getCause(), attacker, e.getFinalDamage());
+
+        List<ItemStack> drops = new ArrayList<>(Arrays.asList(player.getInventory().getContents()));
+        healthAPI.getPlayerUtilsSupport().fakeDamage(player);
+        healthAPI.getPlayerUtilsSupport().callPlayerDeathEvent(player, drops, 0, 0, "");
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onDamageByEntity(EntityDamageByEntityEvent event) {
-        if (!(event.getEntity() instanceof Player)) return;
-        Player victim   = (Player) event.getEntity();
+        if (!(event.getEntity() instanceof Player)) {
+            return;
+        }
+        Player victim = (Player) event.getEntity();
         Entity attacker = resolveAttacker(event.getDamager());
         lastHitManager.record(victim, event.getCause(), attacker, event.getFinalDamage());
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onEnvironmentalDamage(EntityDamageEvent event) {
-        if (event instanceof EntityDamageByEntityEvent) return;
-        if (!(event.getEntity() instanceof Player)) return;
+        if (event instanceof EntityDamageByEntityEvent) {
+            return;
+        }
+        if (!(event.getEntity() instanceof Player)) {
+            return;
+        }
         Player victim = (Player) event.getEntity();
         lastHitManager.record(victim, event.getCause(), null, event.getFinalDamage());
     }
 
-    /**
-     * Resolves the true attacker behind a projectile.
-     * Arrow shot by player → returns the player.
-     * Splash potion thrown by player → returns the player.
-     */
     private Entity resolveAttacker(Entity raw) {
         if (raw instanceof Projectile) {
             ProjectileSource src = ((Projectile) raw).getShooter();
-            if (src instanceof Entity) return (Entity) src;
+            if (src instanceof Entity) {
+                return (Entity) src;
+            }
         }
         return raw;
     }
