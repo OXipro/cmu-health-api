@@ -7,7 +7,9 @@ import com.oxipro.cmu.health.listeners.MobSpawnListener;
 import com.oxipro.cmu.health.listeners.OnDamageListener;
 import com.oxipro.cmu.health.listeners.OnDeathListener;
 import com.oxipro.cmu.health.mobOwner.MobOwnerTracker;
+import com.oxipro.cmu.health.utils.TotemUtil;
 import com.oxipro.cmu.versionsupport.PlayerUtilsSupport;
+import com.oxipro.cmu.versionsupport.VersionMapping;
 import org.bukkit.entity.Player;
 import org.bukkit.event.Listener;
 import org.bukkit.plugin.Plugin;
@@ -23,6 +25,10 @@ import static org.bukkit.Bukkit.getLogger;
 public class HealthAPI {
 
     private Plugin plugin;
+
+    private String mcVersion;
+
+    private TotemUtil totemUtil;
 
     private PlayerUtilsSupport playerUtilsSupport;
 
@@ -51,6 +57,9 @@ public class HealthAPI {
             getLogger().severe("HEALTH-API: Server version not supported");
             return false;
         }
+
+        this.totemUtil = new TotemUtil(playerUtilsSupport);
+
         initManagers();
         registerListeners();
         return true;
@@ -97,6 +106,8 @@ public class HealthAPI {
     public Plugin getPlugin() {
         return plugin;
     }
+
+    public TotemUtil getTotemUtil() { return  totemUtil; }
 
     public PlayerUtilsSupport getPlayerUtilsSupport() { return playerUtilsSupport; }
 

@@ -47,6 +47,10 @@ public class OnDamageListener implements Listener {
             return;
         }
 
+        if (healthAPI.getTotemUtil().wouldVanillaTotemSave(player, e.getCause())) {
+            return;
+        }
+
         e.setCancelled(true);
         healthAPI.markDeathIntercepted(player);
         player.setLastDamageCause(e);
